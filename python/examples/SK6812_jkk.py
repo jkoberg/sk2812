@@ -158,12 +158,37 @@ class Police:
         self.tstrobe = abst + 0.9
         self.strobePhase = 0
 
+
+class Buffer:
+  def __init__(self, strip):
+    self.strip = strip
+    self._pixels = strip.getPixels()
+    self.data = [Color(0,0,0,0)] * strip.numPixels()
+
+  def getPixels(self):
+    return self.data
+
+  def numPixels(self):
+    return len(self.data)
+
+  def __getitem__(self, pos):
+    return self.data[pos]
+
+  def __setitem__(self, pos, value):
+    self.data[pos] = value
+
+  def show(self):
+    self._pixels[:] = self.data
+    self.strip.show()
+
+
 # Main program logic follows:
 if __name__ == '__main__':
-  strip = Adafruit_NeoPixel(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL, LED_STRIP)
-  strip.begin()
+  rawstrip = Adafruit_NeoPixel(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL, LED_STRIP)
+  rawstrip.begin()
+  strip = Buffer(rawstrip)
   framecount = 0
-  frametime = 1/60.0
+  frametime = 1/75.0
   print ('Press Ctrl-C to quit.')
   try:
     cw =  FastColorWheel(strip, speed=1, reps=1, hsvv=0.9)
