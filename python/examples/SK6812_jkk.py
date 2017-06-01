@@ -158,100 +158,25 @@ class Police:
         self.tstrobe = abst + 0.9
         self.strobePhase = 0
 
-class BackgroundIO:
-  def __init__(self, strip, fps=60):
-    self.count = strip.numPixels()
-    self.leds = strip.getPixels()
-    self.strip = strip
-    self.data = [
-      [Color(0,0,0,0)] * self.count,
-      [Color(0,0,0,0)] * self.count
-      ]
-    self.inq = Queue.Queue()
-    self.outq = Queue.Queue()
-    self.currentIdx = 0
-    self.thread = threading.Thread(target = self.inner)
-    self.thread.setDaemon(True)
-    self.statsthread = threading.Thread(target = self.stats)
-    self.statsthread.setDaemon(True)
-    self.statsthread.start()
-    self.t = None
-    self.frametime = 1.0/fps
-    self.framecount = 0
-  def __getitem__(self, pos):
-    return self.data[self.currentIdx][pos]
-  def __setitem__(self, pos, value):
-    self.data[self.currentIdx][pos] = value
-  def getPixels(self):
-    return self
-  def numPixels(self):
-    return self.count
-  def show(self):
-    #print("show putting to outq")
-    self.outq.put(self.currentIdx)
-    self.currentIdx = (self.currentIdx + 1) % 2
-    #print("show getting from inq")
-    lastt = self.inq.get()
-    #print("show got from inq")
-  def stats(self):
-    t = time.time()
-    frames = self.framecount
-    while True:
-      time.sleep(10)
-      told = t
-      t = time.time()
-      framesold = frames
-      frames = self.framecount
-      fps = (frames - framesold) / (t - told)
-      print("%0.3f fps"%(fps,))
-  def inner(self):
-    while True:
-      #print("inner getting from outq")
-      nextidx = self.outq.get()
-      #print("innger got from outq: %s"%(nextidx,))
-      if nextidx == "quit":
-        self.inq.put(None)
-        break
-      if nextidx is None:
-        continue
-      self.leds[:] = self.data[nextidx]
-      self.strip.show()
-      self.framecount = self.framecount + 1
-      if self.t is None:
-        self.t = time.time() + self.frametime
-      else:
-        self.t = self.t + self.frametime
-      self.inq.put(self.t)
-      dwell = self.t - time.time()
-      #print("sleeping %0.3f"%(dwell,))
-      time.sleep(max(0.0, dwell))
-  def startBackgroundThread(self):
-    #print("init putting to outq")
-    self.outq.put(self.currentIdx)
-    self.thread.start()
-  def stopBackgroundThread(self):
-    #print("stopBackgroundThread called")
-    self.outq.put("quit")
-    self.outq.put("quit")
-
-    
 # Main program logic follows:
 if __name__ == '__main__':
   strip = Adafruit_NeoPixel(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL, LED_STRIP)
   strip.begin()
-  b = BackgroundIO(strip, fps=75)
+  framecount = 0
+  frametime = 1/60.0
   print ('Press Ctrl-C to quit.')
   try:
-    cw =  FastColorWheel(b, speed=1, reps=1, hsvv=0.9)
-    bb =  Bars(b, speed=-0.5, widthfrac=0.3, reps=5)
-    bb2 = Bars(b, speed=-0.6, reps=28, widthfrac=0.0, widthabs=3)
-    wb =  Bars(b, speed=2.1, reps=7, offset=13, widthfrac=0.0, widthabs=2, color=Color(0,0,0,255))
-    wb2 = Bars(b, speed=-1.1, reps=5, offset=13, widthfrac=0.0, widthabs=10, color=Color(64,64,255,255))
-    sp =  Spectac(b, fraction=1/50.)
-    pol = Police(b)
-    b.startBackgroundThread()
+    cw =  FastColorWheel(strip, speed=1, reps=1, hsvv=0.9)
+    bb =  Bars(strip, speed=-0.5, widthfrac=0.3, reps=5)
+    bb2 = Bars(strip, speed=-0.6, reps=28, widthfrac=0.0, widthabs=3)
+    wb =  Bars(strip, speed=2.1, reps=7, offset=13, widthfrac=0.0, widthabs=2, color=Color(0,0,0,255))
+    wb2 = Bars(strip, speed=-1.1, reps=5, offset=13, widthfrac=0.0, widthabs=10, color=Color(64,64,255,255))
+    sp =  Spectac(strip, fraction=1/50.)
+    pol = Police(strip)
+    tnext = time.time()
     while True:
-      tfake = b.framecount * b.frametime
+      time.sleep(max(0, time.time() - tnext))
+      tfake = framecount * frametime
       tcycle = tfake % 20.0
       if(False and 0.0 <= tcycle < 5.0):
         pol.step(tfake)
@@ -276,11 +201,12 @@ if __name__ == '__main__':
         #sp.step()
         wb.step()
         wb2.step()
-      b.show()
+      strip.show()
+      framecount = framecount + 1
+      tnext = tnext + frametime
   except KeyboardInterrupt:
     print("exiting")
-    b.stopBackgroundThread()
-    time.sleep(0.25)
+    time.sleep(0.1)
     strip.getPixels()[:] = [Color(0,0,0,0)] * strip.numPixels()
     strip.show()
     print("exited")
