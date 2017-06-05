@@ -23,25 +23,32 @@ LED_STRIP      = ws.SK6812W_STRIP
 
 class Spectac:
   strobeColor = Color(255,255,255,255)
-  offColor = Color(0,0,0,0)
+  
   def __init__(self, strip, count=LED_COUNT, fraction=0.01):
     self.strip = strip
     self.pixels = self.strip.getPixels()
     self.count = count
     self.batch = int(fraction * count)
-    self.indexes = range(count)
-    self.half = int(self.count * 0.5) + self.batch
-    random.shuffle(self.indexes)
+    
   def step(self):
-    lastround = self.indexes[:self.batch]
-    thisround = self.indexes[self.batch:self.half]
-    rest = self.indexes[self.half:]
-    for i in lastround:
-      self.pixels[i] = self.offColor
-    random.shuffle(thisround)
-    self.indexes = thisround + rest + lastround
-    for i in self.indexes[:self.batch]:
-      self.pixels[i] = self.strobeColor
+    for i in range(self.batch):
+      self.pixels[random.randint(0,self.count-1)] = self.strobeColor
+
+
+class Alternate:
+  def __init__(self, strip, c=2, speed=1, color=Color(0,0,0,255)):
+    self.pixels = strip.getPixels()
+    self.count = strip.numPixels()
+    self.color = color
+    self.c = c
+    self.speed = speed
+    self.offset = 0
+
+  def step(self, framecount):
+    self.offset = (self.offset + self.speed) % self.count
+    r = range(self.offset, self.offset + self.count, self.c)
+    for i in r:
+      self.pixels[i % self.count] = self.color
 
 
 class ColorWheel:
@@ -66,6 +73,7 @@ class FastColorWheel:
   def mincolor(self, r,g,b):
     m = min(r,g,b)
     return Color(r-m, g-m, b-m, m)
+  
   def __init__(self, strip, speed=1, reps=1, hsvv=0.03, count=LED_COUNT):
     self.strip = strip
     self.speed = speed
@@ -82,6 +90,7 @@ class FastColorWheel:
         ))) 
       for n in range(count)
           ])
+    
   def step(self):
     self.pixelvalues.rotate(self.speed)
     self.pixels[:] = self.pixelvalues
@@ -100,12 +109,14 @@ class Bars:
     self.sectorwidth = float(self.count) / self.reps # pixels
     self.lightedwidth = self.sectorwidth * self.widthfrac # pixels
     self.sectorstarts = [(n * self.sectorwidth) for n in range(self.reps)]
-    self.offset = offset 
+    self.offset = offset
+    
   def modrange(self, start, end, modulus):
     s,e = (start % modulus, end % modulus)
     if s <= e:
       return range(s, e)
     return (range(s, modulus) + range(0, e))
+  
   def step(self):
     self.offset = (self.offset + self.speed) % self.count # pixels
     starts = [self.offset + s for s in self.sectorstarts]
@@ -178,6 +189,8 @@ class BackgroundIO:
     self.t = None
     self.frametime = 1.0/fps
     self.framecount = 0
+    self.cutlosses = self.frametime * -2
+    self.currentIdx = 0
   def __getitem__(self, pos):
     return self.data[self.currentIdx][pos]
   def __setitem__(self, pos, value):
@@ -187,11 +200,11 @@ class BackgroundIO:
   def numPixels(self):
     return self.count
   def show(self):
-    #print("show putting to outq")
-    self.outq.put(self.currentIdx)
+    lastidx = self.inq.get()
+    #self.outq.put(self.inq.get())
     self.currentIdx = (self.currentIdx + 1) % 2
+    self.outq.put(self.currentIdx)
     #print("show getting from inq")
-    lastt = self.inq.get()
     #print("show got from inq")
   def stats(self):
     t = time.time()
@@ -215,39 +228,58 @@ class BackgroundIO:
       if nextidx is None:
         continue
       self.leds[:] = self.data[nextidx]
+      self.inq.put(nextidx)
       self.strip.show()
+      time.sleep(0.002)
       self.framecount = self.framecount + 1
       if self.t is None:
         self.t = time.time() + self.frametime
       else:
         self.t = self.t + self.frametime
-      self.inq.put(self.t)
       dwell = self.t - time.time()
-      #print("sleeping %0.3f"%(dwell,))
-      time.sleep(max(0.0, dwell))
+      if dwell <= self.cutlosses:
+        self.t = None
+      else:
+        time.sleep(max(0.0, dwell))
   def startBackgroundThread(self):
     #print("init putting to outq")
-    self.outq.put(self.currentIdx)
+    self.inq.put(0)
+    self.inq.put(1)
     self.thread.start()
   def stopBackgroundThread(self):
     #print("stopBackgroundThread called")
-    self.outq.put("quit")
-    self.outq.put("quit")
+    try:
+      self.outq.put("quit")
+      self.outq.put("quit")
+    except Queue.Empty:
+      pass
 
+def fromHSV(h,s,v):
+  r,g,b = colorsys.hsv_to_rgb(h,s,v)
+  return Color(int(r*255), int(g*255), int(b*255))
     
 # Main program logic follows:
 if __name__ == '__main__':
   strip = Adafruit_NeoPixel(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL, LED_STRIP)
+  pixels = strip.getPixels()
   strip.begin()
   b = BackgroundIO(strip, fps=75)
+  allBlack = [Color(0,0,0,0)] * strip.numPixels()
   print ('Press Ctrl-C to quit.')
   try:
-    cw =  FastColorWheel(b, speed=1, reps=1, hsvv=0.9)
+    cw =  FastColorWheel(b, speed=1, reps=1, hsvv=0.7)
     bb =  Bars(b, speed=-0.5, widthfrac=0.3, reps=5)
     bb2 = Bars(b, speed=-0.6, reps=28, widthfrac=0.0, widthabs=3)
+
+    a = Alternate(b, 4)
+    aa = Alternate(b, 5, -1, fromHSV(0.6,1,1))
+
+    hbb1 = Bars(b, speed=-.01, reps=int(strip.numPixels()/4.), widthfrac=0.0, widthabs=1, color=fromHSV(0.3,1.0,1.0))
+    hbb2 = Bars(b, speed=.02, reps=int(strip.numPixels()/3.), widthfrac=0.0, widthabs=1, color=fromHSV(0.6,1.0,1.0))
+    
     wb =  Bars(b, speed=2.1, reps=7, offset=13, widthfrac=0.0, widthabs=2, color=Color(0,0,0,255))
     wb2 = Bars(b, speed=-1.1, reps=5, offset=13, widthfrac=0.0, widthabs=10, color=Color(64,64,255,255))
-    sp =  Spectac(b, fraction=1/50.)
+    sp =  Spectac(b, fraction=1/20.)
     pol = Police(b)
     b.startBackgroundThread()
     while True:
@@ -256,8 +288,13 @@ if __name__ == '__main__':
       if(False and 0.0 <= tcycle < 5.0):
         pol.step(tfake)
       elif(True or 5.0 <= tcycle < 10.0):  
+        #b[:] = allBlack
+        #a.step(b.framecount)
+        #aa.step(b.framecount)
         cw.step()
-        bb.step()
+        #hbb1.step()
+        #hbb2.step()
+        #bb.step()
         #bb2.step()
         #sp.step()
         #wb.step()
