@@ -18,7 +18,7 @@ enum int count = 288;
 enum int bandwidth = 1000000;
 enum float reps = 1.0;
 enum num cwsat = 1.0;
-enum num cwvalue = 0.3;
+enum num cwvalue = 1.0;
 
 enum int frameoverhead = cast(int) (bandwidth * 0.0019);
 enum int pixoverhead = 0;
@@ -89,7 +89,7 @@ void onexit() {
 void main() {
 	sigset(SIGINT, &exit);
 
-	float sv[2][count][chans] = 0 ;
+	float sv[count][chans] = 0 ;
 	float es[count][chans] = 0;
 
 	printf("running at %d bit/s, %d pixels, for %0.2f fps. round %d\n", bandwidth, count, fps, round);
