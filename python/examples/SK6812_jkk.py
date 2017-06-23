@@ -267,7 +267,7 @@ if __name__ == '__main__':
   allBlack = [Color(0,0,0,0)] * strip.numPixels()
   print ('Press Ctrl-C to quit.')
   try:
-    cw =  FastColorWheel(b, speed=1, reps=1, hsvv=0.7)
+    cw =  FastColorWheel(b, speed=1, reps=1, hsvv=1)
     bb =  Bars(b, speed=-0.5, widthfrac=0.3, reps=5)
     bb2 = Bars(b, speed=-0.6, reps=28, widthfrac=0.0, widthabs=3)
 
@@ -279,7 +279,7 @@ if __name__ == '__main__':
     
     wb =  Bars(b, speed=2.1, reps=7, offset=13, widthfrac=0.0, widthabs=2, color=Color(0,0,0,255))
     wb2 = Bars(b, speed=-1.1, reps=5, offset=13, widthfrac=0.0, widthabs=10, color=Color(64,64,255,255))
-    sp =  Spectac(b, fraction=1/20.)
+    sp =  Spectac(b, fraction=1/30.)
     pol = Police(b)
     b.startBackgroundThread()
     while True:
@@ -295,8 +295,8 @@ if __name__ == '__main__':
         #hbb1.step()
         #hbb2.step()
         #bb.step()
-        #bb2.step()
-        #sp.step()
+        bb2.step()
+        sp.step()
         #wb.step()
         #wb2.step()
       elif(10.0 <= tcycle < 15.0):
